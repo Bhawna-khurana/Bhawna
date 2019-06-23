@@ -1,0 +1,31 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  AlarmName:
+    Description: create alarm
+    Type: String
+  OperatorEmail:
+    Description: Email address to notify if there are any scaling operations
+    Type: String
+Resources:
+  MEMAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Alarm if mem_used_percent > 20"
+      Namespace: AWS/EC2
+      MetricName: MEMUtilization
+      Dimensions:
+      - Name: InstanceId
+        Value: i-0f0d74ef710334a9c
+      Statistic: Average
+      Period: '60'
+      EvaluationPeriods: '3'
+      Threshold: '20'
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: [!Ref 'AlarmNotificationTopic']
+  AlarmNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+      - Endpoint: !Ref 'OperatorEmail'
+        Protocol: email

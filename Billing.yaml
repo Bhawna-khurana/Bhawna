@@ -1,0 +1,31 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  AlarmName:
+    Description: create alarm
+    Type: String
+  OperatorEmail:
+    Description: Email address to notify if there are any scaling operations
+    Type: String
+Resources:
+  SpendingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Alarm if AWS spending is over > 2"
+      Namespace: AWS/Billing
+      MetricName: EstimatedCharges
+      Dimensions:
+      - Name: Currency
+        Value: USD
+      Statistic: Maximum
+      Period: '21600'
+      EvaluationPeriods: '1'
+      Threshold: "2"
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: [!Ref 'AlarmNotificationTopic']
+  AlarmNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+      - Endpoint: !Ref 'OperatorEmail'
+        Protocol: email

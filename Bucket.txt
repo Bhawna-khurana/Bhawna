@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  InstanceCount:
+    Type: Number
+
+Conditions:
+  Launch10: !Equals [10, !Ref InstanceCount]
+  Launch9: !Or
+  - !Equals [9, !Ref InstanceCount]
+  - !Condition Launch10
+  Launch8: !Or
+  - !Equals [8, !Ref InstanceCount]
+  - !Condition Launch9
+  Launch7: !Or
+  - !Equals [7, !Ref InstanceCount]
+  - !Condition Launch8
+  Launch6: !Or
+  - !Equals [6, !Ref InstanceCount]
+  - !Condition Launch7
+  Launch5: !Or
+  - !Equals [5, !Ref InstanceCount]
+  - !Condition Launch6
+  Launch4: !Or
+  - !Equals [4, !Ref InstanceCount]
+  - !Condition Launch5
+  Launch3: !Or
+  - !Equals [3, !Ref InstanceCount]
+  - !Condition Launch4
+  Launch2: !Or
+  - !Equals [2, !Ref InstanceCount]
+  - !Condition Launch3
+  Launch1: !Or
+  - !Equals [1, !Ref InstanceCount]
+  - !Condition Launch2
+
+Resources:
+  Bucket1:
+    Condition: Launch1
+    Type: AWS::S3::Bucket
+
+  Bucket2:
+    Condition: Launch2
+    Type: AWS::S3::Bucket
+
+  Bucket3:
+    Condition: Launch3
+    Type: AWS::S3::Bucket
+
+  Bucket4:
+    Condition: Launch4
+    Type: AWS::S3::Bucket
+
+  Bucket5:
+    Condition: Launch5
+    Type: AWS::S3::Bucket
+
+  Bucket6:
+    Condition: Launch6
+    Type: AWS::S3::Bucket
+
+  Bucket7:
+    Condition: Launch7
+    Type: AWS::S3::Bucket
+
+  Bucket8:
+    Condition: Launch8
+    Type: AWS::S3::Bucket
+
+  Bucket9:
+    Condition: Launch9
+    Type: AWS::S3::Bucket
+
+  Bucket10:
+    Condition: Launch10
+    Type: AWS::S3::Bucket

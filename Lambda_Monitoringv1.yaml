@@ -1,0 +1,254 @@
+﻿---
+AWSTemplateFormatVersion: '2010-09-09'
+Metadata:
+  'AWS::CloudFormation::Interface':
+    - Label:
+        default: 'Lambda'
+      Parameters:
+      - FunctionName
+    - Label:
+        default: 'Thresholds'
+      Parameters:
+      - DurationThreshold
+      - EvaluationPeriodsThreshold
+      - ErrorsThreshold
+      - InvocationsThreshold
+      - ThrottlesThreshold
+      - IteratorAgeThreshold
+      - ConcurrentExecutionsThreshold
+Parameters:
+  FunctionName:
+    Description: 'The instance ID of the RDS database instance that you want to monitor.'
+    Type: String
+  DurationThreshold:
+    Description: Measures the elapsed wall clock time from when the function code starts executing as a result of an invocation to when it stops executing.
+    Type: Number
+    Default: 500
+  EvaluationPeriodsThreshold:
+    Description: Measures the number of times a function Evaluate.
+    Type: Number
+    Default: 1
+  ErrorsThreshold:
+    Description: Measures the number of invocations that failed due to errors in the function
+    Type: Number
+    Default: 0
+  InvocationsThreshold:
+    Description: Measures the number of times a function is invoked in response to an event or invocation API call. 
+    Type: Number
+    Default: 1  
+  ThrottlesThreshold:
+    Description: Measures the number of Lambda function invocation attempts that were throttled due to invocation rates exceeding the customer’s concurrent limits 
+    Type: Number
+    Default: 0 
+  IteratorAgeThreshold:
+    Description: Measures the age of the last record for each batch of records processed. Age is the difference between the time Lambda received the batch, and the time the last record in the batch was written to the stream.
+    Type: Number
+    Default: 0 
+  ConcurrentExecutionsThreshold:
+    Description: Emitted as an aggregate metric for all functions in the account, and for functions that have a custom concurrency limit specified.
+    Type: Number
+    Default: 0 
+    
+Resources:
+  ##########################################################################
+  #                                                                        #
+  #                                 TOPIC                                  #
+  #                                                                        #
+  ##########################################################################
+  Topic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      DisplayName: SQS_Monitoring
+      Subscription:
+        - Endpoint: Bhawna.khurana@accenture.com
+          Protocol: email
+  TopicPolicy:
+    Type: 'AWS::SNS::TopicPolicy'
+    Properties:
+      PolicyDocument:
+        Id: Id1
+        Version: '2012-10-17'
+        Statement:
+        - Sid: Sid1
+          Effect: Allow
+          Principal:
+            Service: 'lambda.amazonaws.com' # Allow Lambda Events
+          Action: 'sns:Publish'
+          Resource: !Ref Topic
+        - Sid: Sid2
+          Effect: Allow
+          Principal:
+            AWS: '*' # Allow CloudWatch Alarms
+          Action: 'sns:Publish'
+          Resource: !Ref Topic
+          Condition:
+            StringEquals:
+              'AWS:SourceOwner': !Ref 'AWS::AccountId'
+      Topics:
+      - !Ref Topic
+  ##########################################################################
+  #                                                                        #
+  #                                 ALARMS                                 #
+  #                                                                        #
+  ##########################################################################
+  LogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Join 
+        - ''
+        - - /aws/lambda/
+          - !Ref FunctionName
+  MetricFilterMaxMemoryUsed:
+    Type: 'AWS::Logs::MetricFilter'
+    DependsOn: LogGroup
+    Properties:
+      LogGroupName: !Join 
+        - ''
+        - - /aws/lambda/
+          - !Ref FunctionName
+      FilterPattern: '[..., maxMemoryLabel="Used:", maxMemory, maxMemoryUnit=MB]'
+      MetricTransformations:
+        - MetricValue: $maxMemory
+          MetricNamespace: !Ref FunctionName
+          MetricName: MaxMemoryUsedMB
+  MetricFilterMemorySize:
+    Type: 'AWS::Logs::MetricFilter'
+    DependsOn: LogGroup
+    Properties:
+      LogGroupName: !Join 
+        - ''
+        - - /aws/lambda/
+          - !Ref FunctionName
+      FilterPattern: >-
+        [..., sizeLabel="Size:", sizeMemory, sizeMemoryUnit=MB, maxLabel,
+        memoryLabel, maxMemoryLabel="Used:", maxMemory, maxMemoryUnit=MB]
+      MetricTransformations:
+        - MetricValue: $sizeMemory
+          MetricNamespace: !Ref FunctionName
+          MetricName: MemorySizeMB
+  DurationAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: Trigger an alarm if the duration is over 500ms
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      OKActions:
+      - !Ref Topic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FunctionName
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriodsThreshold
+      Threshold: !Ref DurationThreshold
+      ComparisonOperator: GreaterThanThreshold
+  ErrorsAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: Trigger an alarm if an error is recorded
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      OKActions:
+      - !Ref Topic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FunctionName
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriodsThreshold
+      Threshold: !Ref ErrorsThreshold
+      ComparisonOperator: GreaterThanThreshold
+  InvocationsAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: Trigger an alarm if the function is not invoked at least one per day
+      MetricName: Invocations
+      Namespace: AWS/Lambda
+      OKActions:
+      - !Ref Topic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FunctionName
+      Statistic: Sum
+      Period: 86400
+      EvaluationPeriods: !Ref InvocationsThreshold
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+  ThrottlesAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: Trigger an alarm if a throttle is recorded
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      OKActions:
+      - !Ref Topic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FunctionName
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriodsThreshold
+      Threshold: !Ref ThrottlesThreshold
+      ComparisonOperator: GreaterThanThreshold
+  iteratorAge:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: Trigger an alarm if a iteratorAge is recorded
+      MetricName: iteratorAge
+      Namespace: AWS/Lambda
+      OKActions:
+      - !Ref Topic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FunctionName
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriodsThreshold
+      Threshold: !Ref IteratorAgeThreshold
+      ComparisonOperator: GreaterThanThreshold
+  ConcurrentExecutions:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: Trigger an alarm if a ConcurrentExecutions is recorded
+      MetricName: ConcurrentExecutions
+      Namespace: AWS/Lambda
+      OKActions:
+      - !Ref Topic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FunctionName
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriodsThreshold
+      Threshold: !Ref ConcurrentExecutionsThreshold
+      ComparisonOperator: GreaterThanThreshold
+  UnreservedConcurrentExecutions:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: Trigger an alarm if a UnreservedConcurrentExecutions is recorded
+      MetricName: UnreservedConcurrentExecutions
+      Namespace: AWS/Lambda
+      OKActions:
+      - !Ref Topic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FunctionName
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold

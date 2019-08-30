@@ -1,0 +1,229 @@
+AWSTemplateFormatVersion: 2010-09-09
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+    - Label:
+        default: 'Https endpoint'
+      Parameters:
+      - HttpsEndpoint
+    - Label:
+        default: 'EBS'
+      Parameters:
+      - VolumeId
+    - Label:
+        default: 'Thresholds'
+      Parameters:
+      - EBSQueueLength
+      - EBSReadBytes
+      - EBSReadOps
+      - EBSWriteByte
+      - EBSWriteOps
+      - ThroughPut
+Parameters:
+  VolumeId:
+    Description: 'The Volume ID that you want to monitor.'
+    Type: AWS::EC2::Volume::Id
+  EBSQueueLength:
+    Description: 'The maximum Queue Length'
+    Type: Number
+    Default: 30
+    MinValue: 0
+    MaxValue: 60
+  EBSReadBytes:
+    Description: 'The maximum Read Bytes'
+    Type: Number
+    Default: 2000
+    MinValue: 0
+    MaxValue: 5000
+  EBSReadOps:
+    Description: 'The maximum Read Operations in Bytes.'
+    Type: Number
+    Default: 2000
+    MinValue: 0
+    MaxValue: 5000
+  EBSWriteByte:
+    Description: 'The maximum Write Bytes.'
+    Type: Number
+    Default: 2000
+    MinValue: 0
+    MaxValue: 5000
+  EBSWriteOps:
+    Description: 'The maximum Write Operations in Bytes.'
+    Type: Number
+    Default: 2000
+    MinValue: 0
+    MaxValue: 5000
+  ThroughPut:
+    Description: 'The maximum ThroughPut Percentage'
+    Type: Number
+    Default: 60
+    MinValue: 0
+    MaxValue: 80
+  HttpsEndpoint:
+    Type: String
+    
+Resources:
+  Topic:
+    Type: 'AWS::SNS::Topic'
+    Properties: {}
+  TopicPolicy:
+    Type: 'AWS::SNS::TopicPolicy'
+    Properties:
+      PolicyDocument:
+        Id: Id1
+        Version: '2012-10-17'
+        Statement:
+        - Sid: Sid1
+          Effect: Allow
+          Principal:
+            AWS: '*' # Allow CloudWatch Alarms
+          Action: 'sns:Publish'
+          Resource: !Ref Topic
+          Condition:
+            StringEquals:
+              'AWS:SourceOwner': !Ref 'AWS::AccountId'
+      Topics:
+      - !Ref Topic
+  TopicEndpointSubscription:
+    DependsOn: TopicPolicy
+    Type: 'AWS::SNS::Subscription'
+    Properties:
+      DeliveryPolicy:
+        healthyRetryPolicy:
+          minDelayTarget: 1
+          maxDelayTarget: 60
+          numRetries: 100
+          numNoDelayRetries: 0
+          backoffFunction: exponential
+        throttlePolicy:
+          maxReceivesPerSecond: 1
+      Endpoint: !Ref HttpsEndpoint
+      Protocol: https
+      TopicArn: !Ref Topic
+  ##########################!!!ALARMS!!!################################################               
+  alarmAWSEBSQueueLength:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      ActionsEnabled: 'true'
+      AlarmDescription: Monitors EBS Volume's Performance in terms of Queue Length
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: VolumeId
+        Value: !Ref VolumeId
+      EvaluationPeriods: '1'
+      MetricName: VolumeQueueLength
+      Namespace: AWS/EBS
+      OKActions:
+      - !Ref Topic
+      Period: '300'
+      Statistic: Average
+      Threshold: '30.0'
+      
+  alarmAWSEBSReadBytes:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      ActionsEnabled: 'true'
+      AlarmDescription: Monitors EBS Volume's Performance in terms of Read Bytes.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: VolumeId
+        Value: !Ref VolumeId
+      EvaluationPeriods: '1'
+      MetricName: VolumeReadBytes
+      Namespace: AWS/EBS
+      OKActions:
+      - !Ref Topic
+      Period: '300'
+      Statistic: Average
+      Threshold: '2000.0'
+      
+  alarmAWSEBSReadOps:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      ActionsEnabled: 'true'
+      AlarmDescription: Monitors EBS Volume's Performance in terms of Read Operations.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: VolumeId
+        Value: !Ref VolumeId
+      EvaluationPeriods: '1'
+      MetricName: VolumeReadOps
+      Namespace: AWS/EBS
+      OKActions:
+      - !Ref Topic
+      Period: '300'
+      Statistic: Average
+      Threshold: '2000.0'
+      
+  alarmAWSEBSWriteByte:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      ActionsEnabled: 'true'
+      AlarmDescription: AWS_EBS_WriteByte
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: VolumeId
+        Value: !Ref VolumeId
+      EvaluationPeriods: '3'
+      MetricName: VolumeWriteBytes
+      Namespace: AWS/EBS
+      OKActions:
+      - !Ref Topic
+      Period: '300'
+      Statistic: Average
+      Threshold: '2000.0'
+      
+  alarmAWSEBSWriteOps:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      ActionsEnabled: 'true'
+      AlarmDescription: Monitors EBS Volume's Performance in terms of Write Operations.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: VolumeId
+        Value: !Ref VolumeId
+      EvaluationPeriods: '1'
+      MetricName: VolumeWriteOps
+      Namespace: AWS/EBS
+      OKActions:
+      - !Ref Topic
+      Period: '300'
+      Statistic: Average
+      Threshold: '200.0'
+      
+  alarmEBSThroughput:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      ActionsEnabled: 'true'
+      AlarmDescription: ThroughPut Percentage.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: VolumeId
+        Value: !Ref VolumeId
+      EvaluationPeriods: '1'
+      MetricName: BurstBalance
+      Namespace: AWS/EBS
+      OKActions:
+      - !Ref Topic
+      Period: '300'
+      Statistic: Average
+      Threshold: '60.0'
+Outputs:
+  StackName:
+    Description: 'Stack name.'
+    Value: !Sub '${AWS::StackName}'
+
+      
+

@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: 2010-09-09
+Metadata:
+  'AWS::CloudFormation::Interface':
+    - Label:
+        default: 'AutoScaling Group'
+      Parameters:
+      - EC2AutoScalingGroups
+    - Label:
+        default: 'Thresholds'
+      Parameters:
+      - GroupDesiredCapacity
+      - GroupMaxsize
+      
+Parameters:
+  EC2AutoScalingGroups:
+    Description: 'The EC2 AutoScaling group that you want to monitor.'
+    Type: String
+  GroupDesiredCapacity:
+    Description: 'Monitors the Group in Service Instances vs GroupDesiredCapacity.'
+    Type: Number
+    MinValue: 0
+    MaxValue: 70
+  GroupMaxsize:
+    Description: 'Monitors the Group in Service Instances vs GroupMaxSize.'
+    Type: Number
+    MinValue: 0
+    MaxValue: 1
+Resources:
+  Topic:
+    Type: 'AWS::SNS::Topic'
+    Properties: 
+      DisplayName: ASG Testing
+      Subscription:
+        - Endpoint: bhawna.khurana@accenture.com
+          Protocol: email
+  TopicPolicy:
+    Type: 'AWS::SNS::TopicPolicy'
+    Properties:
+      PolicyDocument:
+        Id: Id1
+        Version: '2012-10-17'
+        Statement:
+        - Sid: Sid1
+          Effect: Allow
+          Principal:
+            AWS: '*' # Allow CloudWatch Alarms
+          Action: 'sns:Publish'
+          Resource: !Ref Topic
+          Condition:
+            StringEquals:
+              'AWS:SourceOwner': !Ref 'AWS::AccountId'
+      Topics:
+      - !Ref Topic
+  ##########################!!!ALARMS!!!################################################  
+  alarmAWSASGGroupDesiredCapacity:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      ActionsEnabled: 'true'
+      AlarmDescription: Monitors the Group in Service Instances vs GroupDesiredCapacity.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: EC2AutoScalingGroups
+        Value: !Ref EC2AutoScalingGroups
+      EvaluationPeriods: '1'
+      MetricName: GroupDesiredCapacity
+      Namespace: AWS/AutoScaling
+      OKActions:
+      - !Ref Topic
+      Period: '300'
+      Statistic: Average
+      Threshold: '70.0'
+  
+  alarmAWSASGGroupMaxsize:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      ActionsEnabled: 'true'
+      AlarmDescription: Monitors the Group in Service Instances vs GroupMaxSize.
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+      - Name: EC2AutoScalingGroups
+        Value: !Ref EC2AutoScalingGroups
+      EvaluationPeriods: '1'
+      MetricName: GroupMaxSize
+      Namespace: AWS/AutoScaling
+      OKActions:
+      - !Ref Topic
+      Period: '300'
+      Statistic: Average
+      Threshold: '1.0'

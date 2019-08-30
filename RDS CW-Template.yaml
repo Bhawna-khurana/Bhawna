@@ -1,0 +1,289 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Metadata:
+  'AWS::CloudFormation::Interface':
+    - Label:
+        default: 'RDS'
+      Parameters:
+      - DBInstanceIdentifier
+    - Label:
+        default: 'Thresholds'
+      Parameters:
+      - BurstBalanceThreshold
+      - CPUUtilizationThreshold
+      - DiskQueueDepthThreshold
+      - FreeableMemoryThreshold
+      - FreeStorageSpaceThreshold
+      - SwapUsageThreshold
+Parameters:
+  DBInstanceIdentifier:
+    Description: 'The instance ID of the RDS database instance that you want to monitor.'
+    Type: String
+  BurstBalanceThreshold:
+    Description: 'The minimum percent of General Purpose SSD (gp2) burst-bucket I/O credits available. (I/O performace will drop here)'
+    Type: Number
+    Default: 20
+    MinValue: 0
+    MaxValue: 100
+  CPUUtilizationThreshold:
+    Description: 'The maximum percentage of CPU utilization.'
+    Type: Number
+    Default: 80
+    MinValue: 0
+    MaxValue: 100
+  DBConnectionThreshold:
+    Description: 'The maximum number of DB connections in use.'
+    Type: Number
+    Default: 500
+    MinValue: 0
+    MaxValue: 1500
+  DiskQueueDepthThreshold:
+    Description: 'The maximum number of outstanding IOs (read/write requests) waiting to access the disk. Noticeable spikes may indicate need to upgrade storage type'
+    Type: Number
+    Default: 100
+    MinValue: 0
+  FreeableMemoryThreshold:
+    Description: 'The minimum amount of available random access memory in Byte.'
+    Type: Number
+    Default: 1000000000 # 1 Gigabyte in Bytes
+    MinValue: 0
+  FreeStorageSpaceThreshold:
+    Description: 'The minimum amount of available storage space in Byte.'
+    Type: Number
+    Default: 1000000000 # 1 Gigabyte in Bytes
+    MinValue: 0
+  ReadLatencyThreshold:
+    Description: 'The maximum amount of swap space used on the DB instance in Byte.'
+    Type: Number
+    Default: 0.10 # in Seconds
+  HighNetworkTransmitThreshold:
+    Description: 'Monitors the outgoing (Transmit) network traffic on the DB instance, including both customer database traffic and Amazon RDS traffic used for monitoring and replication.'
+    Type: Number
+    Default: 1000000000 # 1 Gigabyte in Bytes
+  HighNetworkReceiveThreshold:
+    Description: 'Monitors the incoming (Receive) network traffic on the DB instance, including both customer database traffic and Amazon RDS traffic used for monitoring and replication.'
+    Type: Number
+    Default: 1000000000 # 1 Gigabyte in Bytes
+    
+Resources:
+  ##########################################################################
+  #                                                                        #
+  #                                 TOPIC                                  #
+  #                                                                        #
+  ##########################################################################
+  Topic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      DisplayName: RDS_Monitoring
+      Subscription:
+        - Endpoint: Bhawna.khurana@accenture.com
+          Protocol: email
+  TopicPolicy:
+    Type: 'AWS::SNS::TopicPolicy'
+    Properties:
+      PolicyDocument:
+        Id: Id1
+        Version: '2012-10-17'
+        Statement:
+        - Sid: Sid1
+          Effect: Allow
+          Principal:
+            Service: 'rds.amazonaws.com' # Allow RDS Events
+          Action: 'sns:Publish'
+          Resource: !Ref Topic
+        - Sid: Sid2
+          Effect: Allow
+          Principal:
+            AWS: '*' # Allow CloudWatch Alarms
+          Action: 'sns:Publish'
+          Resource: !Ref Topic
+          Condition:
+            StringEquals:
+              'AWS:SourceOwner': !Ref 'AWS::AccountId'
+      Topics:
+      - !Ref Topic
+  ##########################################################################
+  #                                                                        #
+  #                                 ALARMS                                 #
+  #                                                                        #
+  ##########################################################################
+  BurstBalanceTooLowAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: 'Average database storage burst balance over last 10 minutes too low, expect a significant performance drop soon'
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstanceIdentifier
+      EvaluationPeriods: 1
+      MetricName: BurstBalance
+      Namespace: 'AWS/RDS'
+      OKActions:
+      - !Ref Topic
+      Period: 600
+      Statistic: Average
+      Threshold: !Ref BurstBalanceThreshold
+  CPUUtilizationTooHighAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: 'Average database CPU utilization over last 5 minutes too high'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstanceIdentifier
+      EvaluationPeriods: 1
+      MetricName: CPUUtilization
+      Namespace: 'AWS/RDS'
+      OKActions:
+      - !Ref Topic
+      Period: 300
+      Statistic: Average
+      Threshold: !Ref CPUUtilizationThreshold
+  DBConnectionThresholdAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: 'The number of DB connections exceeded threshold for 5 minutes'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstanceIdentifier
+      EvaluationPeriods: 3
+      MetricName: DatabaseConnections
+      Namespace: 'AWS/RDS'
+      OKActions:
+      - !Ref Topic
+      Period: 300
+      Statistic: Average
+      Threshold: !Ref DBConnectionThreshold
+  DiskQueueDepthTooHighAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: 'Average database disk queue depth over last 10 minutes too high, performance may suffer'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstanceIdentifier
+      EvaluationPeriods: 1
+      MetricName: DiskQueueDepth
+      Namespace: 'AWS/RDS'
+      OKActions:
+      - !Ref Topic
+      Period: 600
+      Statistic: Average
+      Threshold: !Ref DiskQueueDepthThreshold
+  FreeableMemoryTooLowAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: 'Average database freeable memory over last 10 minutes too low, performance may suffer'
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstanceIdentifier
+      EvaluationPeriods: 1
+      MetricName: FreeableMemory
+      Namespace: 'AWS/RDS'
+      OKActions:
+      - !Ref Topic
+      Period: 600
+      Statistic: Average
+      Threshold: !Ref FreeableMemoryThreshold
+  FreeStorageSpaceTooLowAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: 'Average database free storage space over last hour too low'
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstanceIdentifier
+      EvaluationPeriods: 1
+      MetricName: FreeStorageSpace
+      Namespace: 'AWS/RDS'
+      OKActions:
+      - !Ref Topic
+      Period: 3600
+      Statistic: Average
+      Threshold: !Ref FreeStorageSpaceThreshold
+  ReadLatencyThresholdAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: 'Average amount of time taken per disk I/O in last 5 minutes too high'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstanceIdentifier
+      EvaluationPeriods: 1
+      MetricName: ReadLatency
+      Namespace: 'AWS/RDS'
+      OKActions:
+      - !Ref Topic
+      Period: 600
+      Statistic: Average
+      Threshold: !Ref ReadLatencyThreshold
+  HighNetworkTransmitThresholdAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: 'Average outgoing (Transmit) network traffic on the DB instance( in bytes) in last 5 minutes too high'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstanceIdentifier
+      EvaluationPeriods: 1
+      MetricName: NetworkTransmitThroughput
+      Namespace: 'AWS/RDS'
+      OKActions:
+      - !Ref Topic
+      Period: 600
+      Statistic: Average
+      Threshold: !Ref HighNetworkTransmitThreshold
+  HighNetworkReceiveThresholdAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: 'Average incoming (Receive) network traffic on the DB instance( in bytes) in last 5 minutes too high'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstanceIdentifier
+      EvaluationPeriods: 1
+      MetricName: NetworkReceiveThroughput
+      Namespace: 'AWS/RDS'
+      OKActions:
+      - !Ref Topic
+      Period: 600
+      Statistic: Average
+      Threshold: !Ref HighNetworkReceiveThreshold
+  ##########################################################################
+  #                                                                        #
+  #                                 EVENTS                                 #
+  #                                                                        #
+  ##########################################################################
+  EventSubscription:
+    Type: 'AWS::RDS::EventSubscription'
+    Properties:
+      EventCategories:
+      - failover
+      - failure
+      - 'low storage'
+      - maintenance
+      - notification
+      - recovery
+      SnsTopicArn: !Ref Topic
+      SourceIds: [!Ref DBInstanceIdentifier]
+      SourceType: 'db-instance'

@@ -1,0 +1,185 @@
+AWSTemplateFormatVersion: 2010-09-09
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+    - Label:
+        default: 'SQS'
+      Parameters:
+      - QueueName
+    - Label:
+        default: 'Thresholds'
+      Parameters:
+      - ApproximateAgeOfOldestMessage
+      - ApproximateNumberOfMessagesDelayed
+      - ApproximateNumberOfMessagesNotVisible
+      - NumberOfEmptyReceives
+      - NumberOfMessagesDeleted
+Parameters:
+  QueueName:
+    Description: 'The Queue name that you want to monitor.'
+    Type: String
+  ApproximateAgeOfOldestMessage:
+    Description: 'The maximum approximate age of the oldest non-deleted message in the queue.'
+    Type: Number
+    Default: 10
+    MinValue: 0
+    MaxValue: 20
+  ApproximateNumberOfMessagesDelayed:
+    Description: 'The maximum number of messages in the queue that are delayed and not available for reading immediately.'
+    Type: Number
+    Default: 10
+    MinValue: 0
+    MaxValue: 20
+  ApproximateNumberOfMessagesNotVisible:
+    Description: 'The maximum number messages that are "in flight."'
+    Type: Number
+    Default: 10
+    MinValue: 0
+    MaxValue: 20
+  NumberOfEmptyReceives:
+    Description: 'The maximum number of ReceiveMessage API calls that did not return a message.'
+    Type: Number
+    Default: 10
+    MinValue: 0
+    MaxValue: 20
+  NumberOfMessagesDeleted:
+    Description: 'The max.number of messages deleted from the queue.'
+    Type: Number
+    Default: 10
+    MinValue: 0
+    MaxValue: 20
+  
+    
+Resources:
+  Topic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      DisplayName: SQS_Monitoring
+      Subscription:
+        - Endpoint: Bhawna.khurana@gmail.com
+          Protocol: email
+  TopicPolicy:
+    Type: 'AWS::SNS::TopicPolicy'
+    Properties:
+      PolicyDocument:
+        Id: Id1
+        Version: '2012-10-17'
+        Statement:
+        - Sid: Sid1
+          Effect: Allow
+          Principal:
+            AWS: '*' # Allow CloudWatch Alarms
+          Action: 'sns:Publish'
+          Resource: !Ref Topic
+          Condition:
+            StringEquals:
+              'AWS:SourceOwner': !Ref 'AWS::AccountId'
+      Topics:
+      - !Ref Topic
+  
+  ##########################!!!ALARMS!!!################################################               
+  alarmSQSApproximateAgeOfOldestMessage:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      ActionsEnabled: 'true'
+      AlarmDescription: The approximate age of the oldest non-deleted message in the queue.
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+      - Name: QueueName
+        Value: !Ref QueueName
+      EvaluationPeriods: '1'
+      MetricName: ApproximateAgeOfOldestMessage
+      Namespace: AWS/SQS
+      OKActions:
+      - !Ref Topic
+      Period: '300'
+      Statistic: Average
+      Threshold: '10.0'
+      
+  alarmSQSApproximateNumberOfMessagesDelayed:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      ActionsEnabled: 'true'
+      AlarmDescription: >-
+        The number of messages in the queue that are delayed and not available
+        for reading immediately
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+      - Name: QueueName
+        Value: !Ref QueueName
+      EvaluationPeriods: '1'
+      MetricName: ApproximateNumberOfMessagesDelayed
+      Namespace: AWS/SQS
+      OKActions:
+      - !Ref Topic
+      Period: '300'
+      Statistic: Average
+      Threshold: '10.0'
+      
+  alarmSQSApproximateNumberOfMessagesNotVisible:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      ActionsEnabled: 'true'
+      AlarmDescription: >-
+        The number of messages that are "in flight." Messages are considered in
+        flight if they have been sent to a client but have not yet been deleted or have
+        not yet reached the end of their visibility window.
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+      - Name: QueueName
+        Value: !Ref QueueName
+      EvaluationPeriods: '1'
+      MetricName: ApproximateNumberOfMessagesNotVisible
+      Namespace: AWS/SQS
+      OKActions:
+      - !Ref Topic
+      Period: '300'
+      Statistic: Average
+      Threshold: '10.0'
+      
+  alarmSQSNumberOfEmptyReceives:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      ActionsEnabled: 'true'
+      AlarmDescription: The number of ReceiveMessage API calls that did not return a message.
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+      - Name: QueueName
+        Value: !Ref QueueName
+      EvaluationPeriods: '1'
+      MetricName: NumberOfEmptyReceives
+      Namespace: AWS/SQS
+      OKActions:
+      - !Ref Topic
+      Period: '300'
+      Statistic: Average
+      Threshold: '10.0'
+      
+  alarmSQSNumberOfMessagesDeleted:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      ActionsEnabled: 'true'
+      AlarmDescription: The number of messages deleted from the queue.
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+      - Name: QueueName
+        Value: !Ref QueueName
+      EvaluationPeriods: '1'
+      MetricName: NumberOfMessagesDeleted
+      Namespace: AWS/SQS
+      OKActions:
+      - !Ref Topic
+      Period: '300'
+      Statistic: Average
+      Threshold: '10.0'
+      

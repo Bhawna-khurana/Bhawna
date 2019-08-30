@@ -1,0 +1,144 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "ElastiCache-Memcache Monitoring Parameters"
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+    - Label:
+        default: 'ElastiCache'
+      Parameters:
+      - CacheClusterId
+    - Label:
+        default: 'Thresholds'
+      Parameters:
+      - CPUUtilizationThreshold
+      - SwapUsageThreshold
+      - EvictionsThreshold
+      - CurrConnectionsThreshold
+Parameters:
+  CacheClusterId:
+    Description: 'The cluster ID of the ElastiCache memcached cluster that you want to monitor.(Node no. ex-0001)'
+    Type: String
+  CPUUtilizationThreshold:
+    Description: 'The maximum percentage of CPU utilization (all nodes are averaged).'
+    Type: Number
+    Default: 80
+    MinValue: 0
+    MaxValue: 90
+  SwapUsageThreshold:
+    Description: 'The maximum amount of swap space used (all nodes are averaged) in Byte.'
+    Type: Number
+    Default: 40000000 # 40 Megabyte in Byte
+    MinValue: 0
+  EvictionsThreshold:
+    Description: 'The maximum number of keys evicted per minute because of missing memory (all nodes are summed).'
+    Type: Number
+    Default: 1000
+    MinValue: 0
+  CurrConnectionsThreshold:
+    Description: 'A count of the number of connections connected to the cache at an instant in time (all nodes are summed).'
+    Type: Number
+    Default: 6
+    MinValue: 0
+
+  
+Resources:
+  Topic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      DisplayName: SQS_Monitoring
+      Subscription:
+        - Endpoint: Bhawna.khurana@accenture.com
+          Protocol: email
+  TopicPolicy:
+    Type: 'AWS::SNS::TopicPolicy'
+    Properties:
+      PolicyDocument:
+        Id: Id1
+        Version: '2012-10-17'
+        Statement:
+        - Sid: Sid1
+          Effect: Allow
+          Principal:
+            AWS: '*' # Allow CloudWatch Alarms
+          Action: 'sns:Publish'
+          Resource: !Ref Topic
+          Condition:
+            StringEquals:
+              'AWS:SourceOwner': !Ref 'AWS::AccountId'
+      Topics:
+      - !Ref Topic
+
+  ##########################!!!ALARMS!!!################################################
+  
+  CPUUtilizationTooHighAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: 'Average CPU utilization over last 10 minutes too high.'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: CacheClusterId
+        Value: !Ref CacheClusterId
+      EvaluationPeriods: 1
+      MetricName: CPUUtilization
+      Namespace: 'AWS/ElastiCache'
+      OKActions:
+      - !Ref Topic
+      Period: 300
+      Statistic: Average
+      Threshold: !Ref CPUUtilizationThreshold
+  SwapUsageTooHighAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: 'Average swap usage over last 10 minutes too high, performance may suffer (created by marbot).'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: CacheClusterId
+        Value: !Ref CacheClusterId
+      EvaluationPeriods: 1
+      MetricName: SwapUsage
+      Namespace: 'AWS/ElastiCache'
+      OKActions:
+      - !Ref Topic
+      Period: 300
+      Statistic: Average
+      Threshold: !Ref SwapUsageThreshold
+  EvictionsTooHighAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: 'Evictions over last 10 minutes too high, memory may to less for all keys.'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: CacheClusterId
+        Value: !Ref CacheClusterId
+      EvaluationPeriods: 10
+      MetricName: Evictions
+      Namespace: 'AWS/ElastiCache'
+      OKActions:
+      - !Ref Topic
+      Period: 300
+      Statistic: Average
+      Threshold: !Ref EvictionsThreshold
+  CurrConnectionsTooHighAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref Topic
+      AlarmDescription: 'A count of the number of connections connected to the cache at an instant in time.'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: CacheClusterId
+        Value: !Ref CacheClusterId
+      EvaluationPeriods: 10
+      MetricName: CurrConnections
+      Namespace: 'AWS/ElastiCache'
+      OKActions:
+      - !Ref Topic
+      Period: 300
+      Statistic: Average
+      Threshold: !Ref CurrConnectionsThreshold 
